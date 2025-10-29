@@ -1,0 +1,12 @@
+--Present and Absent for the perticular employee count 
+
+SELECT 'Present' AS [Status] , COUNT(DISTINCT PunchDate)  AS TotalDays
+		FROM [dbo].[AttendanceLogDetails]
+		WHERE EmployeeId = @LoginUserId
+			AND PunchDate  BETWEEN @FromDate AND @ToDate 
+		UNION ALL
+		SELECT 'Absent' AS [Status]
+				,(DATEDIFF(DAY, @FromDate, @ToDate) + 1) - COUNT(DISTINCT ALD.PunchDate) AS AbsentCount
+		FROM AttendanceLogDetails ALD
+		WHERE ALD.EmployeeId = @LoginUserId
+		AND ALD.PunchDate BETWEEN @FromDate AND @ToDate;
