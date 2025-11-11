@@ -10,3 +10,60 @@ SELECT 'Present' AS [Status] , COUNT(DISTINCT PunchDate)  AS TotalDays
 		FROM AttendanceLogDetails ALD
 		WHERE ALD.EmployeeId = @LoginUserId
 		AND ALD.PunchDate BETWEEN @FromDate AND @ToDate;
+
+
+(Active and in-Active )
+===================================
+SELECT 
+    M1.MailTemplateId,
+    M1.TemplateName,
+    M1.TemplateTypeId,
+    CASE 
+        WHEN 
+            (CASE 
+                WHEN M1.CompanyId = 5 THEN 1
+                WHEN M1.CompanyId = 1 
+                     AND EXISTS (
+                            SELECT 1 
+                            FROM dbo.MailTemplateDetails M2
+                            WHERE M2.CompanyId = 5 
+                              AND M2.TemplateTypeId = M1.TemplateTypeId
+                      )
+                THEN 0 
+                ELSE M1.IsActive 
+             END) = 1
+        THEN 'Active'
+        ELSE 'In-Active'
+    END AS [Status],
+    CASE 
+        WHEN 
+            (CASE 
+                WHEN M1.CompanyId = 5 THEN 1
+                WHEN M1.CompanyId = 1 
+                     AND EXISTS (
+                            SELECT 1 
+                            FROM dbo.MailTemplateDetails M2
+                            WHERE M2.CompanyId = 5 
+                              AND M2.TemplateTypeId = M1.TemplateTypeId
+                      )
+                THEN 0 
+                ELSE M1.IsActive 
+             END) = 1
+        THEN 'Green'
+        ELSE 'Red'
+    END AS Status_Colour,
+    M1.IsActive,
+    CASE 
+        WHEN M1.CompanyId = 5 THEN 1
+        WHEN M1.CompanyId = 1 
+             AND EXISTS (
+                    SELECT 1 
+                    FROM dbo.MailTemplateDetails M2
+                    WHERE M2.CompanyId = 5 
+                      AND M2.TemplateTypeId = M1.TemplateTypeId
+              )
+        THEN 0
+        ELSE M1.IsActive
+    END AS Final_IsActive,
+    M1.IsDefaultTemplate
+FROM dbo.MailTemplateDetails M1;
