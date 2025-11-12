@@ -1,0 +1,26 @@
+
+Future one only show 
+
+SELECT  
+    JSD.JobStatusId,
+    JSD.JobStatusName
+FROM [Tetro_PAY].[dbo].[JobStatusDetails] JSD
+WHERE 
+    (
+        JSD.JobStatusId NOT IN (
+            SELECT DISTINCT AHD.StatusId
+            FROM [dbo].[ActivityHistryDetails] AHD
+            WHERE AHD.ModuleId = @MasterInfoId
+        )
+    )
+    OR 
+    (
+        EXISTS (
+            SELECT 1 
+            FROM [dbo].[ActivityHistryDetails] AHD
+            WHERE AHD.ModuleId = @MasterInfoId 
+              AND AHD.StatusId = 4
+        )
+        AND JSD.JobStatusId IN (3, 5)
+    )
+ORDER BY JSD.JobStatusId;
