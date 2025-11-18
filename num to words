@@ -1,0 +1,75 @@
+CREATE FUNCTION dbo.fn_NumToWords(@num BIGINT)
+RETURNS VARCHAR(500)
+AS
+BEGIN
+    DECLARE @words VARCHAR(500) = ''
+
+    IF @num = 0 
+        RETURN 'Zero'
+
+    DECLARE @Crore INT, @Lakh INT, @Thousand INT, @Hundred INT, @Remainder INT
+
+    SET @Crore = @num / 10000000
+    SET @num = @num % 10000000
+
+    SET @Lakh = @num / 100000
+    SET @num = @num % 100000
+
+    SET @Thousand = @num / 1000
+    SET @num = @num % 1000
+
+    SET @Hundred = @num / 100
+    SET @Remainder = @num % 100
+
+    DECLARE @Below20 TABLE (id INT, word VARCHAR(20))
+    INSERT INTO @Below20 VALUES
+    (1,'One'),(2,'Two'),(3,'Three'),(4,'Four'),(5,'Five'),
+    (6,'Six'),(7,'Seven'),(8,'Eight'),(9,'Nine'),(10,'Ten'),
+    (11,'Eleven'),(12,'Twelve'),(13,'Thirteen'),(14,'Fourteen'),
+    (15,'Fifteen'),(16,'Sixteen'),(17,'Seventeen'),
+    (18,'Eighteen'),(19,'Nineteen')
+
+    DECLARE @Tens TABLE (id INT, word VARCHAR(20))
+    INSERT INTO @Tens VALUES
+    (2,'Twenty'),(3,'Thirty'),(4,'Forty'),(5,'Fifty'),
+    (6,'Sixty'),(7,'Seventy'),(8,'Eighty'),(9,'Ninety')
+
+    DECLARE @temp VARCHAR(50)
+
+    -- crore
+    IF @Crore > 0
+        SET @words = @words + dbo.fn_NumToWords(@Crore) + ' Crore '
+
+    -- lakh
+    IF @Lakh > 0
+        SET @words = @words + dbo.fn_NumToWords(@Lakh) + ' Lakh '
+
+    -- thousand
+    IF @Thousand > 0
+        SET @words = @words + dbo.fn_NumToWords(@Thousand) + ' Thousand '
+
+    -- hundred
+    IF @Hundred > 0
+        SET @words = @words + dbo.fn_NumToWords(@Hundred) + ' Hundred '
+
+    -- last two digits
+    IF @Remainder > 0
+    BEGIN
+        IF LEN(@words) > 0 SET @words = @words + 'and '
+
+        IF @Remainder < 20
+            SELECT @words = @words + word FROM @Below20 WHERE id = @Remainder
+        ELSE
+            SELECT @words = @words + t.word + CASE WHEN @Remainder % 10 > 0 THEN ' ' + b.word ELSE '' END
+            FROM @Tens t
+            LEFT JOIN @Below20 b ON b.id = (@Remainder % 10)
+            WHERE t.id = @Remainder / 10
+    END
+
+    RETURN @words
+END
+
+
+
+  dbo.fn_NumToWords(CAST(REPLACE(CandidateCTC, ',', '') AS BIGINT)) + ' Only' AS CTCWords
+FROM ...
