@@ -1,0 +1,81 @@
+night shift
+
+LEFT JOIN (
+
+DECLARE @LoginUserId INT = 204,
+        @EmployeeId INT = 204,
+        @FromDate DATE = '2025-11-01',
+        @ToDate DATE = '2025-11-20',
+        @IsMine BIT = 1;
+
+DECLARE @CompanyId INT;
+DECLARE @NightShiftCutoff TIME = '08:00:00'; -- Change to '07:00:00' or '06:00:00' if needed
+
+-- Get Company Id
+SELECT @CompanyId = CompanyId 
+FROM [Empinfo].[dbo].[EmployeeDetails] 
+WHERE EmployeeId = @LoginUserId;
+
+-- Temp table for display dates (24th, 25th, etc.)
+DROP TABLE IF EXISTS #Attendance;
+CREATE TABLE #Attendance (
+    Id INT IDENTITY(1,1),
+    PunchDate DATE,
+    CompanyId TINYINT
+);
+    SELECT 
+        EmployeeId,
+        ShiftDate,
+        MIN(CheckInTime)  AS CheckIn,
+        MAX(CheckOutTime) AS CheckOut,
+        SUM(WorkingMinutes) AS TotalMinutesPerDay,
+        SUM(WorkingMinutes) AS MinutesPerDay
+    FROM (
+        SELECT 
+            AL.EmployeeId,
+            AL.PunchDate,
+            AL.PunchTime,
+            AL.Status,
+            -- Assign every punch to the correct SHIFT START DATE
+            CASE 
+                WHEN CONVERT(TIME, AL.PunchTime) <= @NightShiftCutoff 
+                     AND AL.PunchTime >= '00:00:00'   -- Safety: only early morning punches
+                THEN DATEADD(DAY, -1, CAST(AL.PunchDate AS DATE))  -- e.g. 25th 05:30 AM → belongs to 24th
+                ELSE CAST(AL.PunchDate AS DATE)
+            END AS ShiftDate,
+
+            -- First IN time (formatted)
+            FIRST_VALUE(CASE WHEN AL.Status = 1 THEN FORMAT(AL.PunchTime, 'hh:mm tt') END) 
+                OVER (PARTITION BY AL.EmployeeId, 
+                      CASE WHEN CONVERT(TIME, AL.PunchTime) <= @NightShiftCutoff THEN DATEADD(DAY,-1,CAST(AL.PunchDate AS DATE)) ELSE CAST(AL.PunchDate AS DATE) END 
+                      ORDER BY AL.PunchTime) AS CheckInTime,
+
+            -- Last OUT time (formatted)
+            FIRST_VALUE(CASE WHEN AL.Status = 0 THEN FORMAT(AL.PunchTime, 'hh:mm tt') END) 
+                OVER (PARTITION BY AL.EmployeeId, 
+                      CASE WHEN CONVERT(TIME, AL.PunchTime) <= @NightShiftCutoff THEN DATEADD(DAY,-1,CAST(AL.PunchDate AS DATE)) ELSE CAST(AL.PunchDate AS DATE) END 
+                      ORDER BY AL.PunchTime DESC) AS CheckOutTime,
+
+            -- Working minutes only for IN → next OUT pairs
+            CASE 
+                WHEN AL.Status = 1 THEN 
+                    DATEDIFF(MINUTE, AL.PunchTime,
+                        ISNULL((
+                            SELECT MIN(O.PunchTime)
+                            FROM [dbo].[AttendanceLogDetails] O
+                            WHERE O.EmployeeId = AL.EmployeeId
+                              AND O.PunchDate = AL.PunchDate
+                              AND O.Status = 0
+                              AND O.PunchTime > AL.PunchTime
+                        ), AL.PunchTime))
+                ELSE 0 
+            END AS WorkingMinutes
+
+        FROM [dbo].[AttendanceLogDetails] AL
+        WHERE AL.EmployeeId = @EmployeeId
+          AND AL.PunchDate BETWEEN @FromDate AND DATEADD(DAY, 1, @ToDate)
+    ) Sub
+    GROUP BY EmployeeId, ShiftDate
+) PH ON PH.EmployeeId = @EmployeeId AND AD.PunchDate = PH.ShiftDate
+
+--select * from [dbo].[AttendanceLogDetails] where EmployeeId = 204 and PunchDate = '2025-11-01'
