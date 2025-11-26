@@ -1,0 +1,115 @@
+;WITH Calendar AS
+					(
+						SELECT DATEADD(DAY, v.number, DATEFROMPARTS(YEAR(@FromDate), MONTH(@FromDate), 1)) AS WorkDate
+						FROM master.dbo.spt_values v
+						WHERE v.type = 'P'
+						  AND v.number < 31
+					),
+					ShiftApplied AS
+					(
+						SELECT  
+							C.WorkDate
+							,@LoginUserId AS EmployeeId
+							,COALESCE(
+								CASE 
+									WHEN HD.HolidayName IS NOT NULL THEN 'Holiday'
+									WHEN CWD.IsWorkingDay = 0 THEN 'WeekEnd'
+									WHEN ESR.ShiftStatusId = 3 THEN
+										CASE 
+											WHEN ESR.ShiftId IS NOT NULL THEN
+												 SR_SD.ShiftName + ' / ' 
+												 + CONVERT(varchar(7), SR_SD.StartTime, 100) + ' / '  
+												 + CONVERT(varchar(7), SR_SD.EndTime, 100) + ' / ' 
+												 + RIGHT('0' + CAST(
+													   (DATEDIFF(MINUTE, SR_SD.StartTime, SR_SD.EndTime) 
+														 + CASE WHEN SR_SD.EndTime < SR_SD.StartTime THEN 1440 ELSE 0 END) / 60
+												   AS varchar(2)), 2)
+												 + ':' 
+												 + RIGHT('0' + CAST(
+													   (DATEDIFF(MINUTE, SR_SD.StartTime, SR_SD.EndTime) 
+														 + CASE WHEN SR_SD.EndTime < SR_SD.StartTime THEN 1440 ELSE 0 END) % 60
+												   AS varchar(2)), 2)
+												 + ' Hrs'
+											ELSE 
+												 SD.ShiftName + ' / ' 
+												 + CONVERT(varchar(7), ESMDR.StartTime, 100) + ' / '  
+												 + CONVERT(varchar(7), ESMDR.EndTime, 100) + ' / ' 
+												 + RIGHT('0' + CAST(
+													   (DATEDIFF(MINUTE, ESMDR.StartTime, ESMDR.EndTime) 
+														 + CASE WHEN ESMDR.EndTime < ESMDR.StartTime THEN 1440 ELSE 0 END) / 60
+												   AS varchar(2)), 2)
+												 + ':' 
+												 + RIGHT('0' + CAST(
+													   (DATEDIFF(MINUTE, ESMDR.StartTime, ESMDR.EndTime) 
+														 + CASE WHEN ESMDR.EndTime < ESMDR.StartTime THEN 1440 ELSE 0 END) % 60
+												   AS varchar(2)), 2)
+												 + ' Hrs'
+										END
+									WHEN SD.ShiftName IS NOT NULL THEN 
+										 SD.ShiftName + ' / ' 
+										 + CONVERT(varchar(7), SD.StartTime, 100) + ' / '  
+										 + CONVERT(varchar(7), SD.EndTime, 100) + ' / ' 
+										 + RIGHT('0' + CAST(
+											   (DATEDIFF(MINUTE, SD.StartTime, SD.EndTime) 
+												 + CASE WHEN SD.EndTime < SD.StartTime THEN 1440 ELSE 0 END) / 60
+										   AS varchar(2)), 2)
+										 + ':' 
+										 + RIGHT('0' + CAST(
+											   (DATEDIFF(MINUTE, SD.StartTime, SD.EndTime) 
+												 + CASE WHEN SD.EndTime < SD.StartTime THEN 1440 ELSE 0 END) % 60
+										   AS varchar(2)), 2)
+										 + ' Hrs'
+								END, ''
+							) AS ShiftValues
+						FROM Calendar C
+						LEFT JOIN [dbo].[EmployeeShiftMappingDetails] ESMD
+							ON C.WorkDate BETWEEN ESMD.StartDate AND ESMD.EndDate
+							AND ESMD.EmployeeId = @LoginUserId
+						LEFT JOIN [dbo].[EmployeeShiftDetails] ESD
+							ON ESMD.EmployeeShiftId = ESD.EmployeeShiftId
+							AND ESD.ShiftStatusId = 3
+						LEFT JOIN [dbo].[ShiftDetails] SD
+							ON ESD.ShiftId = SD.ShiftId
+						LEFT JOIN [Tetro_PAY].[dbo].[HolidayDetails] HD
+							ON CAST(HD.HolidayDate AS DATE) = CAST(C.WorkDate AS DATE)
+							AND HD.IsActive = 1
+							AND HD.CompanyId = @CompanyId
+						LEFT JOIN [Tetro_PAY].[dbo].[CompanyWorkingDayDetails] CWD
+							ON CWD.Day = DATENAME(WEEKDAY, C.WorkDate)
+						   AND CWD.CompanyId = @CompanyId
+						   AND CWD.IsActive = 1
+						LEFT JOIN [dbo].[EmployeeShiftDetails_Request] ESR
+							ON C.WorkDate BETWEEN ESR.StartDate AND ESR.EndDate
+							AND ESD.ShiftStatusId = 3
+							--AND ESR.EmployeeId = @LoginUserId
+							AND ESR.IsActive = 1
+						LEFT JOIN [dbo].[ShiftDetails] SR_SD
+							ON ESR.ShiftId = SR_SD.ShiftId  
+						LEFT JOIN [dbo].[EmployeeShiftMappingDetails_Request] ESMDR
+							ON ESR.EmployeeShiftRequestId = ESMDR.EmployeeShiftRequestId
+							AND C.WorkDate BETWEEN ESMDR.StartDate AND ESMDR.EndDate
+							AND ESMDR.IsActive = 1
+						WHERE MONTH(C.WorkDate) = MONTH(@FromDate)
+						  AND YEAR(C.WorkDate) = YEAR(@FromDate)
+					)
+					SELECT 
+						EmployeeId,
+						[01],[02],[03],[04],[05],[06],[07],[08],[09],[10],
+						[11],[12],[13],[14],[15],[16],[17],[18],[19],[20],
+						[21],[22],[23],[24],[25],[26],[27],[28],[29],[30],[31]
+					FROM
+					(
+						SELECT 
+							EmployeeId,
+							FORMAT(WorkDate, 'dd') AS DayNo,
+							ShiftValues
+						FROM ShiftApplied
+					) src
+					PIVOT
+					(
+						MAX(ShiftValues) FOR DayNo IN
+						([01],[02],[03],[04],[05],[06],[07],[08],[09],[10],
+						 [11],[12],[13],[14],[15],[16],[17],[18],[19],[20],
+						 [21],[22],[23],[24],[25],[26],[27],[28],[29],[30],[31])
+					) pvt
+					ORDER BY EmployeeId;
