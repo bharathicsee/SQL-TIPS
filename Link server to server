@@ -1,0 +1,22 @@
+How to Link the One server to Another Server  in ( sql Server )
+
+--Find the Server Name (  SELECT @@SERVERNAME;  )
+
+SELECT SERVERPROPERTY('MachineName') AS MachineName,
+       SERVERPROPERTY('ServerName') AS ServerName,
+       SERVERPROPERTY('InstanceName') AS InstanceName;
+
+ Example =  SELECT * FROM [TETROSOFT-SERVER\SQL2019].[Tetro_PAY].[dbo].[DepartmentDetails]
+
+--Check existing linked servers =   EXEC sp_linkedservers;
+
+--Add a linked server
+
+EXEC sp_addlinkedserver 
+    @server = 'Tetrosoft_UAT',
+    @srvproduct = '',
+    @provider = 'SQLNCLI',
+    @datasrc = 'Tetrosoft\UAT';
+
+SELECT * 
+FROM [Tetrosoft_UAT].[Tetro_PAY].[dbo].[DepartmentDetails];
