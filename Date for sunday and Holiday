@@ -1,0 +1,26 @@
+
+
+
+SET LANGUAGE English;
+
+DECLARE @Today     DATE = GETDATE();
+DECLARE @StartDate DATE = DATEFROMPARTS(YEAR(@Today), 1, 1);
+DECLARE @EndDate   DATE = DATEFROMPARTS(YEAR(@Today), 12, 31);
+
+SELECT DISTINCT
+       COALESCE(HD.HoliDayDate,
+                DATEADD(DAY, v.number, @StartDate)) AS WorkingDate
+FROM master..spt_values v
+LEFT JOIN Tetro_PAY.dbo.CompanyWorkingDayDetails WD
+     ON DATENAME(WEEKDAY, DATEADD(DAY, v.number, @StartDate)) = WD.[Day]
+    AND WD.CompanyId = 25
+LEFT JOIN Tetro_PAY.dbo.HoliDayDetails HD
+     ON HD.HoliDayDate = DATEADD(DAY, v.number, @StartDate)
+    AND HD.CompanyId = 25
+WHERE v.type = 'P'
+  AND v.number BETWEEN 0 AND DATEDIFF(DAY, @StartDate, @EndDate)
+  AND (
+        WD.IsWorkingDay = 0        -- Week off
+        OR HD.HoliDayDate IS NOT NULL  -- Holiday
+      )
+ORDER BY WorkingDate;
