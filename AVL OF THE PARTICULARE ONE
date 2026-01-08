@@ -1,0 +1,9 @@
+SELECT  LeaveTypeId,
+        LeaveTypeName
+FROM [Tetro_PAY].[dbo].[LeaveTypeDetails]
+WHERE CompanyId = @CompanyId
+  AND LeaveTypeName <> 'Permission'
+  AND (  LeaveTypeName <> 'Compensatory Off'  OR
+      ( (  SELECT COUNT(*) FROM dbo.CompensatoryOffDetails  WHERE CompensatoryOffStatusId = 3   AND EmployeeId = @EmployeeId )
+          > ISNULL( ( SELECT SUM(DATEDIFF(DAY, FromDate, ToDate) + 1) FROM dbo.LeaveDetails  WHERE LeaveTypeId = 39  AND LeaveStatusId IN (2, 3)   AND EmployeeId = @EmployeeId ), 0 )))
+ORDER BY LeaveTypeId;
