@@ -1,0 +1,5 @@
+INSERT INTO #Shift (ShiftDate)
+SELECT DATEADD(DAY, v.number, @FromDate)
+FROM master..spt_values v
+WHERE v.type = 'P'
+  AND v.number <= DATEDIFF(DAY, @FromDate, @ToDate);
