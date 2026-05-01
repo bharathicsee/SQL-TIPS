@@ -1,0 +1,8 @@
+
+UPDATE AttendanceLogDetails
+SET PunchTime = 
+    DATEADD(SECOND, 
+        DATEDIFF(SECOND, 0, CAST(PunchTime AS TIME)), 
+        CAST('2026-05-01' AS DATETIME)
+    )
+WHERE CAST(PunchTime AS DATE) = '1900-01-01';
