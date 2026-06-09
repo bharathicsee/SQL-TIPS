@@ -1,0 +1,269 @@
+USE [TetroSync]
+GO
+/****** Object:  StoredProcedure [dbo].[USP_Rpt_LeaveDetails]    Script Date: 09-06-2026 9.49.29 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+/*=================================================================================================================================================
+Procedure Name		:	[dbo].[USP_Rpt_LeaveDetails]
+Description			:	Procedure used to retrieve the LeaveDetails (When click on LeaveCategory in Report screen)
+Input parameter		:	@LoginUserId, @FromDate, @ToDate, @ReportCategory, @ReportValue
+Output parameter	:	@Status, @Message
+Author				:	Bharathiraja.G
+Created on			:	28-11-2025
+Version				:	1.0
+Comment				:	1. Get the Regularization reportDetails for the Given @FromDate, @ToDate, @ReportCategory, @ReportValue
+							to show the values in Grid.
+						2. Then Return the output Parameter values as @Status = 1 and @Message = NULL.
+==================================================================================================================================================*/
+ALTER     PROCEDURE [dbo].[USP_Rpt_LeaveDetails]
+(
+	@LoginUserId		INT				
+	,@FromDate			DATE			
+	,@ToDate			DATE			
+	,@ReportCategory	NVARCHAR(100)	
+	,@ReportValue		SQL_VARIANT	
+	,@Status			BIT				OUT
+	,@Message			NVARCHAR(500)	OUT
+)
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+	--Declare a variable
+	DECLARE @CompanyId		INT
+		,@DSqlQuery		NVARCHAR(MAX)
+		,@SQL			NVARCHAR(MAX)
+		,@BranchId		INT 
+		,@EmployeeId	INT;
+
+	SET @FromDate = CONVERT(date, @FromDate);
+	SET @ToDate   = CONVERT(date, @ToDate);
+
+	SELECT	@CompanyId = CompanyId
+			,@EmployeeId = EmployeeId
+	FROM	[Tetro_Pay].[dbo].[UserDetails]
+	WHERE	UserId = @LoginUserId;
+
+	SELECT  @BranchId = BranchId 	
+	FROM	[EmpInfo].[dbo].[EmployeeDetails]
+	WHERE	EmployeeId = @EmployeeId
+
+	BEGIN TRY 
+		SET @DSqlQuery = '	SELECT 	 BranchName AS  Branch
+							,DepartMentName AS  DepartMentName
+							,ISNULL(ED.EmployeeImage,'' '' )  AS  EmpImage
+							--,DesignationName AS  Designation
+							,CONCAT(ED.FirstName,'' '' ,ED.LastName,'' ('',ED.EmployeeCompanyId,'')'') AS  EmployeeName
+							,FORMAT(FromDate, ''dd-MMM-yyyy'') AS  FromDate
+							,FORMAT(ToDate, ''dd-MMM-yyyy'')  AS  ToDate
+							,LeaveTypeName AS  LeaveType
+							,NoOfDays AS  [No Of Days]
+							,SD.StatusName AS [Status]
+							--,CASE WHEN LD.LeaveStatusId IN (3,4,5) THEN ISNULL(RVD.EmployeeImage,'' '') ELSE '' '' END AS ApprovePrsnImg
+							,CASE WHEN LD.LeaveStatusId IN (3,4,5) THEN CONCAT(RVD.FirstName,'' '' ,RVD.LastName,'' ('',RVD.EmployeeCompanyId,'')'') ELSE '' '' END AS ApprovedBy
+					 FROM  (SELECT * FROM [dbo].[LeaveDetails] 
+							WHERE	CONVERT(DATE, CreatedDate)  BETWEEN CONVERT(DATE, @FromDate) AND CONVERT(DATE, @ToDate)
+							AND		CompanyId = @CompanyId
+							) LD 
+					   JOIN [Tetro_PAY].[dbo].[LeaveTypeDetails] LTD
+							ON LD.LeaveTypeId = LTD.LeaveTypeId
+					    JOIN	[EmpInfo].[dbo].[EmployeeDetails] ED
+							ON	LD.EmployeeId = ED.EmployeeId 
+						JOIN(	SELECT * 
+								FROM	EmpInfo.[dbo].[EmployeeReportingPersonMappingDetails]
+								WHERE ReportingPersonId = @EmployeeId 
+								AND 	CompanyId = @CompanyId) AS ERPD 
+							ON  ED.EmployeeId = ERPD.EmployeeId
+						 JOIN	[dbo].[StatusDetails] SD
+							ON	LD.LeaveStatusId = SD.StatusId
+						 JOIN [Tetro_Pay].[dbo].[DepartMentDetails] DD
+							 ON ED.DepartMentId = DD.DepartMentId
+						 JOIN [Tetro_Pay].[dbo].[BranchDetails] BD
+							ON ED.BranchId = BD.BranchId
+						 JOIN [Tetro_Pay].[dbo].DesignationDetails DDD
+							ON ED.DesignationId = DDD.DesignationId
+						LEFT JOIN	(
+										SELECT	RD.EmployeeId, ED.EmployeeImage, ED.FirstName,ED.LastName,EmployeeCompanyId
+										FROM	[dbo].[LeaveDetails] RD
+										JOIN  [Tetro_Pay].[dbo].[UserDetails] UD
+											ON	RD.Updatedby = UD.UserId 
+										JOIN	[EmpInfo].[dbo].[EmployeeDetails] ED 
+											ON	UD.EmployeeId = ED.EmployeeId
+										
+								) AS RVD
+						ON	RVD.EmployeeId = LD.EmployeeId '
+
+		IF @ReportCategory = 'Mine'
+		BEGIN
+			SET @DSqlQuery = '	SELECT 	 BranchName AS  Branch
+							,DepartMentName AS  DepartMentName
+							,ISNULL(ED.EmployeeImage,'' '' )  AS  EmpImage
+							--,DesignationName AS  Designation
+							,CONCAT(ED.FirstName,'' '' ,ED.LastName,'' ('',ED.EmployeeCompanyId,'')'') AS  EmployeeName
+							,FORMAT(FromDate, ''dd-MMM-yyyy'') AS  FromDate
+							,FORMAT(ToDate, ''dd-MMM-yyyy'')  AS  ToDate
+							,LeaveTypeName AS  LeaveType
+							,NoOfDays AS  [No Of Days]
+							,SD.StatusName AS [Status]
+							--,CASE WHEN LD.LeaveStatusId IN (3,4,5) THEN ISNULL(RVD.EmployeeImage,'' '') ELSE '' '' END AS ApprovePrsnImg
+							,CASE WHEN LD.LeaveStatusId IN (3,4,5) THEN CONCAT(RVD.FirstName,'' '' ,RVD.LastName,'' ('',RVD.EmployeeCompanyId,'')'') ELSE '' '' END AS ApprovedBy
+					 FROM  (SELECT * FROM [dbo].[LeaveDetails] 
+							WHERE	CONVERT(DATE, CreatedDate)  BETWEEN CONVERT(DATE, @FromDate) AND CONVERT(DATE, @ToDate)
+							AND		CompanyId = @CompanyId
+							) LD 
+					   JOIN [Tetro_PAY].[dbo].[LeaveTypeDetails] LTD
+							ON LD.LeaveTypeId = LTD.LeaveTypeId
+					    JOIN	(SELECT * FROM [EmpInfo].[dbo].[EmployeeDetails] 
+								WHERE EmployeeId  = @EmployeeId  )ED
+							ON	LD.EmployeeId = ED.EmployeeId 
+						 JOIN	[dbo].[StatusDetails] SD
+							ON	LD.LeaveStatusId = SD.StatusId
+						 JOIN [Tetro_Pay].[dbo].[DepartMentDetails] DD
+							 ON ED.DepartMentId = DD.DepartMentId
+						 JOIN [Tetro_Pay].[dbo].[BranchDetails] BD
+							ON ED.BranchId = BD.BranchId
+						 JOIN [Tetro_Pay].[dbo].DesignationDetails DDD
+							ON ED.DesignationId = DDD.DesignationId
+						LEFT JOIN	(
+										SELECT	RD.EmployeeId, ED.EmployeeImage, ED.FirstName,ED.LastName,EmployeeCompanyId
+										FROM	[dbo].[LeaveDetails] RD
+										JOIN  [Tetro_Pay].[dbo].[UserDetails] UD
+											ON	RD.Updatedby = UD.UserId 
+										JOIN	[EmpInfo].[dbo].[EmployeeDetails] ED 
+											ON	UD.EmployeeId = ED.EmployeeId
+										
+								) AS RVD
+						ON	RVD.EmployeeId = LD.EmployeeId '
+
+		END 
+
+		SET @SQL =  @DSqlQuery;
+
+		IF @ReportCategory = 'Branch'
+		BEGIN
+				-- Report header
+			SELECT  DISTINCT @ReportCategory AS ReportCategory
+					,CASE 
+						WHEN @ReportValue = 0 THEN 'All' ELSE BranchName  END AS ReportValue
+					,CASE 
+						WHEN  @FromDate IS NULL AND @ToDate IS NULL THEN ''
+						ELSE CONCAT(CONVERT(NVARCHAR(50),@FromDate,105), ' to ',CONVERT(NVARCHAR(50),@ToDate,105))
+					END AS Duration
+					,'Leave Report' AS ReportName
+			FROM	[Tetro_Pay].[dbo].[BranchDetails]
+			WHERE	BranchId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN BranchId ELSE @ReportValue END;
+									 
+			SELECT @DSqlQuery = @DSqlQuery + '	WHERE	ED.BranchId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN ED.BranchId ELSE @ReportValue END 
+												ORDER BY LD.FromDate DESC '
+				 								
+			SELECT @SQL = @SQL + '	WHERE	ED.BranchId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN ED.BranchId ELSE @ReportValue END 
+										ORDER BY LD.FromDate DESC '
+		END 
+		ELSE IF @ReportCategory = 'Mine' 
+		BEGIN 
+			SELECT	DISTINCT @ReportCategory AS ReportCategory
+					,CASE WHEN @ReportValue = @LoginUserId THEN 'Mine' END AS ReportValue
+					,CONCAT(CONVERT(NVARCHAR(50),@FromDate,105),NULL , CONVERT(NVARCHAR(50),@ToDate,105)) AS Duration
+					,'Attendance Report' AS ReportName 
+			
+			SET	@DSqlQuery = @DSqlQuery + '	WHERE ED.EmployeeId = CASE WHEN @ReportValue = @LoginUserId THEN ED.EmployeeId  END 
+												ORDER BY LD.FromDate DESC   ';
+			SET	@SQL = @SQL + '	WHERE ED.EmployeeId = CASE WHEN @ReportValue = @LoginUserId THEN ED.EmployeeId  END 
+									ORDER BY LD.FromDate DESC  ';
+		END 
+		ELSE IF @ReportCategory = 'Department'
+		BEGIN
+				-- Report header
+			SELECT  DISTINCT @ReportCategory AS ReportCategory
+					,CASE 
+						WHEN @ReportValue = 0 THEN 'All' ELSE DepartmentName  END AS ReportValue
+					,CASE 
+						WHEN  @FromDate IS NULL AND @ToDate IS NULL THEN ''
+						ELSE CONCAT(CONVERT(NVARCHAR(50),@FromDate,105), ' to ',CONVERT(NVARCHAR(50),@ToDate,105))
+					END AS Duration
+					,'Leave Report' AS ReportName
+			FROM	[Tetro_Pay].[dbo].[DepartMentDetails]
+			WHERE	DepartMentId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN DepartMentId ELSE @ReportValue END;
+									 
+			SELECT @DSqlQuery = @DSqlQuery + '	WHERE	DD.DepartMentId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN DD.DepartMentId ELSE @ReportValue END 
+											ORDER BY LD.CreatedDate DESC '
+				 								
+			SELECT @SQL = @SQL + '	WHERE	DD.DepartMentId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN DD.DepartMentId ELSE @ReportValue END 
+									ORDER BY LD.CreatedDate DESC '
+		END 
+		ELSE IF @ReportCategory = 'Leave Type'
+		BEGIN
+				-- Report header
+			SELECT  DISTINCT @ReportCategory AS ReportCategory
+					,CASE 
+						WHEN @ReportValue = 0 THEN 'All' ELSE LeaveTypeName  END AS ReportValue
+					,CASE 
+						WHEN  @FromDate IS NULL AND @ToDate IS NULL THEN ''
+						ELSE CONCAT(CONVERT(NVARCHAR(50),@FromDate,105), ' to ',CONVERT(NVARCHAR(50),@ToDate,105))
+					END AS Duration
+					,'Leave Report' AS ReportName
+			FROM	[Tetro_PAY].[dbo].[LeaveTypeDetails]
+			WHERE	LeaveTypeId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN LeaveTypeId ELSE @ReportValue END;
+									 
+			SELECT @DSqlQuery = @DSqlQuery + '	WHERE	LD.LeaveTypeId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN LD.LeaveTypeId ELSE @ReportValue END 
+												ORDER BY LD.CreatedDate DESC '
+				 								
+			SELECT @SQL = @SQL + '	WHERE	LD.LeaveTypeId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN LD.LeaveTypeId ELSE @ReportValue END 
+									ORDER BY LD.CreatedDate DESC  '
+		END 
+		ELSE IF @ReportCategory = 'Leave Status'
+		BEGIN
+				-- Report header
+			SELECT  DISTINCT @ReportCategory AS ReportCategory
+					,CASE 
+						WHEN @ReportValue = 0 THEN 'All' ELSE StatusName  END AS ReportValue
+					,CASE 
+						WHEN  @FromDate IS NULL AND @ToDate IS NULL THEN ''
+						ELSE CONCAT(CONVERT(NVARCHAR(50),@FromDate,105), ' to ',CONVERT(NVARCHAR(50),@ToDate,105))
+					END AS Duration
+					,'Leave Report' AS ReportName
+			FROM	[dbo].[StatusDetails]
+			WHERE	StatusId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN StatusId ELSE @ReportValue END;
+									 
+			SELECT @DSqlQuery = @DSqlQuery + '	WHERE	LD.LeaveStatusId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN LD.LeaveStatusId ELSE @ReportValue END
+												ORDER BY LD.CreatedDate DESC '
+				 								
+			SELECT @SQL = @SQL + '	WHERE	LD.LeaveStatusId = CASE WHEN ISNULL(@ReportValue,0) = 0 THEN LD.LeaveStatusId ELSE @ReportValue END 
+												ORDER BY LD.CreatedDate DESC '
+		END 
+
+
+		PRINT @DSqlQuery
+		EXECUTE SP_EXECUTESQL @DSqlQuery, N' @CompanyId TINYINT, @ReportValue SQL_VARIANT, @FromDate DATETIME, @ToDate DATETIME ,@EmployeeId INT  , @LoginUserId INT ',
+												@CompanyId = @CompanyId, @ReportValue = @ReportValue,  @FromDate = @FromDate, @ToDate = @ToDate,@EmployeeId =@EmployeeId, @LoginUserId = @LoginUserId ;
+		PRINT @SQL
+		EXECUTE SP_EXECUTESQL @SQL, N' @CompanyId TINYINT, @ReportValue SQL_VARIANT, @FromDate DATETIME, @ToDate DATETIME ,@EmployeeId INT , @LoginUserId INT  ',
+										@CompanyId= @CompanyId, @ReportValue = @ReportValue , @FromDate = @FromDate, @ToDate = @ToDate,@EmployeeId =@EmployeeId , @LoginUserId = @LoginUserId;
+	
+
+
+		SELECT	@Status		= 1 
+				,@Message	= NULL;
+	END TRY 
+	BEGIN CATCH 
+		SELECT	@Status = 0
+				,@Message = CONVERT(NVARCHAR(500),ISNULL(ERROR_MESSAGE(),''));
+	END CATCH 
+END
+/*============================================================================================================================================
+	DECLARE @Status		BIT
+			,@Message	NVARCHAR(100);
+
+	EXEC [dbo].[USP_Rpt_LeaveDetails]	@LoginUserId		=	128
+										,@FromDate			=	'2026-01-01 14:30:22.023'
+										,@ToDate			=	'2026-01-15 14:30:22.023'
+										,@ReportCategory	=	'Mine'
+										,@ReportValue		=	128
+										,@Status			=	@Status		OUT
+										,@Message			=	@Message	OUT
+
+	SELECT @Status	AS Status, @Message	AS Message;
+==============================================================================================================================================*/
